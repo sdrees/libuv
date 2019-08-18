@@ -1325,7 +1325,7 @@ int uv__convert_utf8_to_utf16(const char* utf8, int utf8len, WCHAR** utf16) {
     return uv_translate_sys_error(GetLastError());
   }
 
-  (*utf16)[bufsize] = '\0';
+  (*utf16)[bufsize] = L'\0';
   return 0;
 }
 
@@ -1481,17 +1481,15 @@ int uv_os_getenv(const char* name, char* buffer, size_t* size) {
   if (r != 0)
     return r;
 
+  SetLastError(ERROR_SUCCESS);
   len = GetEnvironmentVariableW(name_w, var, MAX_ENV_VAR_LENGTH);
   uv__free(name_w);
   assert(len < MAX_ENV_VAR_LENGTH); /* len does not include the null */
 
   if (len == 0) {
     r = GetLastError();
-
-    if (r == ERROR_ENVVAR_NOT_FOUND)
-      return UV_ENOENT;
-
-    return uv_translate_sys_error(r);
+    if (r != ERROR_SUCCESS)
+      return uv_translate_sys_error(r);
   }
 
   /* Check how much space we need */
