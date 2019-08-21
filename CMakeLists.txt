@@ -116,6 +116,7 @@ set(uv_test_sources
     test/test-shutdown-eof.c
     test/test-shutdown-twice.c
     test/test-signal-multiple-loops.c
+    test/test-signal-pending-on-close.c
     test/test-signal.c
     test/test-socket-buffer-size.c
     test/test-spawn.c
@@ -127,6 +128,7 @@ set(uv_test_sources
     test/test-tcp-close-accept.c
     test/test-tcp-close-while-connecting.c
     test/test-tcp-close.c
+    test/test-tcp-close-reset.c
     test/test-tcp-connect-error-after-write.c
     test/test-tcp-connect-error.c
     test/test-tcp-connect-timeout.c
