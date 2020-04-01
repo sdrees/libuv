@@ -408,10 +408,12 @@ int nanosleep(const struct timespec* req, struct timespec* rem) {
    * Don't leak EAGAIN, that just means the timeout expired.
    */
   if (rv == -1)
-    if (err != EAGAIN)
+    if (err == EAGAIN)
+      rv = 0;
+    else
       errno = err;
 
-  if (rem != NULL && (rv == 0 || err == EINTR || err == EAGAIN)) {
+  if (rem != NULL && (rv == 0 || err == EINTR)) {
     rem->tv_nsec = nanorem;
     rem->tv_sec = secrem;
   }
@@ -555,4 +557,29 @@ size_t strnlen(const char* str, size_t maxlen) {
     return maxlen;
   else
     return p - str;
+}
+
+
+int sem_init(UV_PLATFORM_SEM_T* semid, int pshared, unsigned int value) {
+  UNREACHABLE();
+}
+
+
+int sem_destroy(UV_PLATFORM_SEM_T* semid) {
+  UNREACHABLE();
+}
+
+
+int sem_post(UV_PLATFORM_SEM_T* semid) {
+  UNREACHABLE();
+}
+
+
+int sem_trywait(UV_PLATFORM_SEM_T* semid) {
+  UNREACHABLE();
+}
+
+
+int sem_wait(UV_PLATFORM_SEM_T* semid) {
+  UNREACHABLE();
 }
