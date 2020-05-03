@@ -202,6 +202,9 @@ static int uv__udp_recvmmsg(uv_udp_t* handle, uv_buf_t* buf) {
     msgs[k].msg_hdr.msg_iovlen = 1;
     msgs[k].msg_hdr.msg_name = peers + k;
     msgs[k].msg_hdr.msg_namelen = sizeof(peers[0]);
+    msgs[k].msg_hdr.msg_control = NULL;
+    msgs[k].msg_hdr.msg_controllen = 0;
+    msgs[k].msg_hdr.msg_flags = 0;
   }
 
   do
@@ -944,29 +947,17 @@ static int uv__udp_set_source_membership6(uv_udp_t* handle,
 #endif
 
 
-int uv_udp_init_ex(uv_loop_t* loop, uv_udp_t* handle, unsigned int flags) {
-  int domain;
-  int err;
-  int extra_flags;
+int uv__udp_init_ex(uv_loop_t* loop,
+                    uv_udp_t* handle,
+                    unsigned flags,
+                    int domain) {
   int fd;
 
-  /* Use the lower 8 bits for the domain */
-  domain = flags & 0xFF;
-  if (domain != AF_INET && domain != AF_INET6 && domain != AF_UNSPEC)
-    return UV_EINVAL;
-
-  /* Use the higher bits for extra flags */
-  extra_flags = flags & ~0xFF;
-  if (extra_flags & ~UV_UDP_RECVMMSG)
-    return UV_EINVAL;
-
+  fd = -1;
   if (domain != AF_UNSPEC) {
-    err = uv__socket(domain, SOCK_DGRAM, 0);
-    if (err < 0)
-      return err;
-    fd = err;
-  } else {
-    fd = -1;
+    fd = uv__socket(domain, SOCK_DGRAM, 0);
+    if (fd < 0)
+      return fd;
   }
 
   uv__handle_init(loop, (uv_handle_t*)handle, UV_UDP);
@@ -978,15 +969,7 @@ int uv_udp_init_ex(uv_loop_t* loop, uv_udp_t* handle, unsigned int flags) {
   QUEUE_INIT(&handle->write_queue);
   QUEUE_INIT(&handle->write_completed_queue);
 
-  if (extra_flags & UV_UDP_RECVMMSG)
-    handle->flags |= UV_HANDLE_UDP_RECVMMSG;
-
   return 0;
-}
-
-
-int uv_udp_init(uv_loop_t* loop, uv_udp_t* handle) {
-  return uv_udp_init_ex(loop, handle, AF_UNSPEC);
 }
 
 
