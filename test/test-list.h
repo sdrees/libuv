@@ -127,6 +127,8 @@ TEST_DECLARE   (tcp_bind_writable_flags)
 TEST_DECLARE   (tcp_listen_without_bind)
 TEST_DECLARE   (tcp_connect_error_fault)
 TEST_DECLARE   (tcp_connect_timeout)
+TEST_DECLARE   (tcp_local_connect_timeout)
+TEST_DECLARE   (tcp6_local_connect_timeout)
 TEST_DECLARE   (tcp_close_while_connecting)
 TEST_DECLARE   (tcp_close)
 TEST_DECLARE   (tcp_close_reset_accepted)
@@ -283,6 +285,7 @@ TEST_DECLARE   (getnameinfo_basic_ip6)
 TEST_DECLARE   (getsockname_tcp)
 TEST_DECLARE   (getsockname_udp)
 TEST_DECLARE   (gettimeofday)
+TEST_DECLARE   (test_macros)
 TEST_DECLARE   (fail_always)
 TEST_DECLARE   (pass_always)
 TEST_DECLARE   (socket_buffer_size)
@@ -524,12 +527,17 @@ TEST_DECLARE  (idna_toascii)
 TEST_DECLARE  (utf8_decode1)
 TEST_DECLARE  (uname)
 
+TEST_DECLARE  (metrics_idle_time)
+TEST_DECLARE  (metrics_idle_time_thread)
+TEST_DECLARE  (metrics_idle_time_zero)
+
 TASK_LIST_START
   TEST_ENTRY_CUSTOM (platform_output, 0, 1, 5000)
 
 #if 0
   TEST_ENTRY  (callback_order)
 #endif
+  TEST_ENTRY  (test_macros)
   TEST_ENTRY  (close_order)
   TEST_ENTRY  (run_once)
   TEST_ENTRY  (run_nowait)
@@ -678,6 +686,8 @@ TASK_LIST_START
   TEST_ENTRY  (tcp_listen_without_bind)
   TEST_ENTRY  (tcp_connect_error_fault)
   TEST_ENTRY  (tcp_connect_timeout)
+  TEST_ENTRY  (tcp_local_connect_timeout)
+  TEST_ENTRY  (tcp6_local_connect_timeout)
   TEST_ENTRY  (tcp_close_while_connecting)
   TEST_ENTRY  (tcp_close)
   TEST_ENTRY  (tcp_close_reset_accepted)
@@ -853,7 +863,7 @@ TASK_LIST_START
 
   TEST_ENTRY  (tmpdir)
 
-  TEST_ENTRY_CUSTOM (hrtime, 0, 0, 10000)
+  TEST_ENTRY_CUSTOM (hrtime, 0, 0, 20000)
 
   TEST_ENTRY_CUSTOM (getaddrinfo_fail, 0, 0, 10000)
   TEST_ENTRY_CUSTOM (getaddrinfo_fail_sync, 0, 0, 10000)
@@ -1115,6 +1125,10 @@ TASK_LIST_START
   TEST_HELPER   (not_readable_nor_writable_on_read_error, tcp4_echo_server)
   TEST_ENTRY    (not_readable_on_eof)
   TEST_HELPER   (not_readable_on_eof, tcp4_echo_server)
+
+  TEST_ENTRY  (metrics_idle_time)
+  TEST_ENTRY  (metrics_idle_time_thread)
+  TEST_ENTRY  (metrics_idle_time_zero)
 
 #if 0
   /* These are for testing the test runner. */
