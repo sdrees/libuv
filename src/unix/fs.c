@@ -923,8 +923,12 @@ static ssize_t uv__fs_sendfile(uv_fs_t* req) {
         r = uv__fs_copy_file_range(in_fd, &off, out_fd, NULL, req->bufsml[0].len, 0);
 
         if (r == -1 && errno == ENOSYS) {
+          /* ENOSYS - it will never work */
           errno = 0;
           copy_file_range_support = 0;
+        } else if (r == -1 && errno == ENOTSUP) {
+          /* ENOTSUP - it could work on another file system type */
+          errno = 0;
         } else {
           goto ok;
         }
@@ -1431,8 +1435,9 @@ static int uv__fs_statx(int fd,
   case -1:
     /* EPERM happens when a seccomp filter rejects the system call.
      * Has been observed with libseccomp < 2.3.3 and docker < 18.04.
+     * EOPNOTSUPP is used on DVS exported filesystems
      */
-    if (errno != EINVAL && errno != EPERM && errno != ENOSYS)
+    if (errno != EINVAL && errno != EPERM && errno != ENOSYS && errno != EOPNOTSUPP)
       return -1;
     /* Fall through. */
   default:

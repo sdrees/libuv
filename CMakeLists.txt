@@ -118,7 +118,7 @@ set(uv_sources
     src/version.c)
 
 if(WIN32)
-  list(APPEND uv_defines WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0600)
+  list(APPEND uv_defines WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0602)
   list(APPEND uv_libraries
        psapi
        user32
@@ -475,6 +475,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-poll-close-doesnt-corrupt-stack.c
        test/test-poll-close.c
        test/test-poll-closesocket.c
+       test/test-poll-multiple-handles.c
        test/test-poll-oob.c
        test/test-poll.c
        test/test-process-priority.c
