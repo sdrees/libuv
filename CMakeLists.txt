@@ -212,7 +212,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
        src/unix/random-sysctl-linux.c)
 endif()
 
-if(APPLE OR CMAKE_SYSTEM_NAME MATCHES "Android|Linux|OS390")
+if(APPLE OR CMAKE_SYSTEM_NAME MATCHES "Android|Linux")
   list(APPEND uv_sources src/unix/proctitle.c)
 endif()
 
@@ -266,9 +266,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
-  list(APPEND uv_defines PATH_MAX=255)
+  enable_language(CXX)
+  list(APPEND uv_defines PATH_MAX=1024)
   list(APPEND uv_defines _AE_BIMODAL)
   list(APPEND uv_defines _ALL_SOURCE)
+  list(APPEND uv_defines _ENHANCED_ASCII_EXT=0xFFFFFFFF)
   list(APPEND uv_defines _ISOC99_SOURCE)
   list(APPEND uv_defines _LARGE_TIME_API)
   list(APPEND uv_defines _OPEN_MSGQ_EXT)
@@ -279,14 +281,31 @@ if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
   list(APPEND uv_defines _UNIX03_SOURCE)
   list(APPEND uv_defines _UNIX03_THREADS)
   list(APPEND uv_defines _UNIX03_WITHDRAWN)
+  list(APPEND uv_defines _XOPEN_SOURCE=600)
   list(APPEND uv_defines _XOPEN_SOURCE_EXTENDED)
   list(APPEND uv_sources
        src/unix/pthread-fixes.c
        src/unix/os390.c
-       src/unix/os390-syscalls.c)
-  list(APPEND uv_cflags -Wc,DLL -Wc,exportall -Wc,xplink)
-  list(APPEND uv_libraries -Wl,xplink)
-  list(APPEND uv_test_libraries -Wl,xplink)
+       src/unix/os390-syscalls.c
+       src/unix/os390-proctitle.c)
+  list(APPEND uv_cflags
+       -q64
+       -qascii
+       -qexportall
+       -qgonumber
+       -qlongname
+       -qlibansi
+       -qfloat=IEEE
+       -qtune=10
+       -qarch=10
+       -qasm
+       -qasmlib=sys1.maclib:sys1.modgen)
+  find_library(ZOSLIB
+    NAMES zoslib
+    PATHS ${ZOSLIB_DIR}
+    PATH_SUFFIXES lib
+  )
+  list(APPEND uv_libraries ${ZOSLIB})
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "OS400")
@@ -349,6 +368,10 @@ target_include_directories(uv
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
+if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
+  target_include_directories(uv PUBLIC $<BUILD_INTERFACE:${ZOSLIB_DIR}/include>)
+  set_target_properties(uv PROPERTIES LINKER_LANGUAGE CXX)
+endif()
 target_link_libraries(uv ${uv_libraries})
 
 add_library(uv_a STATIC ${uv_sources})
@@ -360,6 +383,10 @@ target_include_directories(uv_a
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
+if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
+  target_include_directories(uv_a PUBLIC $<BUILD_INTERFACE:${ZOSLIB_DIR}/include>)
+  set_target_properties(uv_a PROPERTIES LINKER_LANGUAGE CXX)
+endif()
 target_link_libraries(uv_a ${uv_libraries})
 
 if(LIBUV_BUILD_TESTS)
@@ -582,6 +609,11 @@ if(LIBUV_BUILD_TESTS)
   add_test(NAME uv_test_a
            COMMAND uv_run_tests_a
            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
+    set_target_properties(uv_run_benchmarks_a PROPERTIES LINKER_LANGUAGE CXX)
+    set_target_properties(uv_run_tests PROPERTIES LINKER_LANGUAGE CXX)
+    set_target_properties(uv_run_tests_a PROPERTIES LINKER_LANGUAGE CXX)
+  endif()
 endif()
 
 if(UNIX OR MINGW)
