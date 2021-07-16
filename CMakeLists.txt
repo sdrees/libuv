@@ -210,7 +210,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
        src/unix/pthread-fixes.c
        src/unix/random-getentropy.c
        src/unix/random-getrandom.c
-       src/unix/random-sysctl-linux.c)
+       src/unix/random-sysctl-linux.c
+       src/unix/epoll.c)
 endif()
 
 if(APPLE OR CMAKE_SYSTEM_NAME MATCHES "Android|Linux")
@@ -254,7 +255,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
        src/unix/linux-syscalls.c
        src/unix/procfs-exepath.c
        src/unix/random-getrandom.c
-       src/unix/random-sysctl-linux.c)
+       src/unix/random-sysctl-linux.c
+       src/unix/epoll.c)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
@@ -325,7 +327,10 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   list(APPEND uv_defines __EXTENSIONS__ _XOPEN_SOURCE=500)
   list(APPEND uv_libraries kstat nsl sendfile socket)
-  list(APPEND uv_sources src/unix/no-proctitle.c src/unix/sunos.c)
+  list(APPEND uv_sources
+       src/unix/no-proctitle.c
+       src/unix/sunos.c
+       src/unix/epoll.c)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Haiku")
@@ -485,6 +490,9 @@ if(LIBUV_BUILD_TESTS)
        test/test-metrics.c
        test/test-multiple-listen.c
        test/test-mutexes.c
+       test/test-not-readable-nor-writable-on-read-error.c
+       test/test-not-readable-on-eof.c
+       test/test-not-writable-after-shutdown.c
        test/test-osx-select.c
        test/test-pass-always.c
        test/test-ping-pong.c
@@ -517,6 +525,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-semaphore.c
        test/test-shutdown-close.c
        test/test-shutdown-eof.c
+       test/test-shutdown-simultaneous.c
        test/test-shutdown-twice.c
        test/test-signal-multiple-loops.c
        test/test-signal-pending-on-close.c
