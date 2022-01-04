@@ -31,11 +31,24 @@ if(QEMU)
 endif()
 
 option(ASAN "Enable AddressSanitizer (ASan)" OFF)
-if(ASAN AND CMAKE_C_COMPILER_ID MATCHES "AppleClang|GNU|Clang")
+option(TSAN "Enable ThreadSanitizer (TSan)" OFF)
+
+if((ASAN OR TSAN) AND NOT (CMAKE_C_COMPILER_ID MATCHES "AppleClang|GNU|Clang"))
+  message(SEND_ERROR "Sanitizer support requires clang or gcc. Try again with -DCMAKE_C_COMPILER.")
+endif()
+
+if(ASAN)
   add_definitions(-D__ASAN__=1)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
   set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
   set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+endif()
+
+if(TSAN)
+  add_definitions(-D__TSAN__=1)
+  set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer -fsanitize=thread")
+  set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=thread")
+  set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=thread")
 endif()
 
 # Compiler check
@@ -476,6 +489,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-idna.c
        test/test-ip4-addr.c
        test/test-ip6-addr.c
+       test/test-ip-name.c
        test/test-ipc-heavy-traffic-deadlock-bug.c
        test/test-ipc-send-recv.c
        test/test-ipc.c
@@ -489,7 +503,6 @@ if(LIBUV_BUILD_TESTS)
        test/test-multiple-listen.c
        test/test-mutexes.c
        test/test-not-readable-nor-writable-on-read-error.c
-       test/test-not-readable-on-eof.c
        test/test-not-writable-after-shutdown.c
        test/test-osx-select.c
        test/test-pass-always.c
@@ -517,6 +530,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-process-title.c
        test/test-queue-foreach-delete.c
        test/test-random.c
+       test/test-readable-on-eof.c
        test/test-ref.c
        test/test-run-nowait.c
        test/test-run-once.c
@@ -573,6 +587,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-udp-alloc-cb-fail.c
        test/test-udp-bind.c
        test/test-udp-connect.c
+       test/test-udp-connect6.c
        test/test-udp-create-socket-early.c
        test/test-udp-dgram-too-big.c
        test/test-udp-ipv6.c
@@ -647,8 +662,11 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 install(FILES ${PROJECT_BINARY_DIR}/libuv.pc ${PROJECT_BINARY_DIR}/libuv-static.pc
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-install(TARGETS uv LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS uv EXPORT libuvConfig
+        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS uv_a ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(EXPORT libuvConfig DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libuv)
 
 if(MSVC)
   set(CMAKE_DEBUG_POSTFIX d)
