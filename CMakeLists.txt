@@ -215,7 +215,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
   list(APPEND uv_defines _GNU_SOURCE)
   list(APPEND uv_libraries dl)
   list(APPEND uv_sources
-       src/unix/android-ifaddrs.c
        src/unix/linux-core.c
        src/unix/linux-inotify.c
        src/unix/linux-syscalls.c
@@ -257,6 +256,17 @@ if(APPLE)
        src/unix/darwin-proctitle.c
        src/unix/darwin.c
        src/unix/fsevents.c)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "GNU")
+  list(APPEND uv_libraries dl)
+  list(APPEND uv_sources
+       src/unix/bsd-ifaddrs.c
+       src/unix/no-fsevents.c
+       src/unix/no-proctitle.c
+       src/unix/posix-hrtime.c
+       src/unix/posix-poll.c
+       src/unix/hurd.c)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -418,6 +428,7 @@ if(LIBUV_BUILD_TESTS)
     test/benchmark-fs-stat.c
     test/benchmark-getaddrinfo.c
     test/benchmark-loop-count.c
+    test/benchmark-queue-work.c
     test/benchmark-million-async.c
     test/benchmark-million-timers.c
     test/benchmark-multi-accept.c
@@ -663,9 +674,11 @@ install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 install(FILES ${PROJECT_BINARY_DIR}/libuv.pc ${PROJECT_BINARY_DIR}/libuv-static.pc
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 install(TARGETS uv EXPORT libuvConfig
-        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(TARGETS uv_a ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS uv_a EXPORT libuvConfig
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(EXPORT libuvConfig DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libuv)
 
 if(MSVC)
