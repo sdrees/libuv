@@ -1718,6 +1718,7 @@ UV_EXTERN int uv_chdir(const char* dir);
 UV_EXTERN uint64_t uv_get_free_memory(void);
 UV_EXTERN uint64_t uv_get_total_memory(void);
 UV_EXTERN uint64_t uv_get_constrained_memory(void);
+UV_EXTERN uint64_t uv_get_available_memory(void);
 
 UV_EXTERN uint64_t uv_hrtime(void);
 UV_EXTERN void uv_sleep(unsigned int msec);
@@ -1802,6 +1803,7 @@ UV_EXTERN int uv_thread_setaffinity(uv_thread_t* tid,
 UV_EXTERN int uv_thread_getaffinity(uv_thread_t* tid,
                                     char* cpumask,
                                     size_t mask_size);
+UV_EXTERN int uv_thread_getcpu(void);
 UV_EXTERN uv_thread_t uv_thread_self(void);
 UV_EXTERN int uv_thread_join(uv_thread_t *tid);
 UV_EXTERN int uv_thread_equal(const uv_thread_t* t1, const uv_thread_t* t2);
