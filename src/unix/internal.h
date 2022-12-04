@@ -207,7 +207,6 @@ struct uv__statx {
     defined(__APPLE__) || \
     defined(__DragonFly__) || \
     defined(__FreeBSD__) || \
-    defined(__FreeBSD_kernel__) || \
     defined(__linux__) || \
     defined(__OpenBSD__) || \
     defined(__NetBSD__)
@@ -410,22 +409,6 @@ int uv__getsockpeername(const uv_handle_t* handle,
                         uv__peersockfunc func,
                         struct sockaddr* name,
                         int* namelen);
-
-#if defined(__linux__)            ||                                      \
-    defined(__FreeBSD__)          ||                                      \
-    defined(__FreeBSD_kernel__)   ||                                       \
-    defined(__DragonFly__)
-#define HAVE_MMSG 1
-struct uv__mmsghdr {
-  struct msghdr msg_hdr;
-  unsigned int msg_len;
-};
-
-int uv__recvmmsg(int fd, struct uv__mmsghdr* mmsg, unsigned int vlen);
-int uv__sendmmsg(int fd, struct uv__mmsghdr* mmsg, unsigned int vlen);
-#else
-#define HAVE_MMSG 0
-#endif
 
 #if defined(__sun)
 #if !defined(_POSIX_VERSION) || _POSIX_VERSION < 200809L

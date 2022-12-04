@@ -222,6 +222,7 @@ test_run_tests_SOURCES = test/blackhole-server.c \
                          test/test-pipe-close-stdout-read-stdin.c \
                          test/test-pipe-set-non-blocking.c \
                          test/test-pipe-set-fchmod.c \
+                         test/test-pipe-try-write.c \
                          test/test-platform-output.c \
                          test/test-poll.c \
                          test/test-poll-close.c \
@@ -466,10 +467,6 @@ libuv_la_SOURCES += src/unix/bsd-ifaddrs.c \
                     src/unix/posix-hrtime.c \
                     src/unix/posix-poll.c \
                     src/unix/hurd.c
-endif
-
-if KFREEBSD
-libuv_la_CFLAGS += -D_GNU_SOURCE
 endif
 
 if LINUX

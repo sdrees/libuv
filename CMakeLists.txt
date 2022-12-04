@@ -294,11 +294,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "GNU")
        src/unix/hurd.c)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD")
-  list(APPEND uv_defines _GNU_SOURCE)
-  list(APPEND uv_libraries dl freebsd-glue)
-endif()
-
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND uv_defines _GNU_SOURCE _POSIX_C_SOURCE=200112)
   list(APPEND uv_libraries dl rt)
@@ -560,6 +555,7 @@ if(LIBUV_BUILD_TESTS)
        test/test-pipe-server-close.c
        test/test-pipe-set-fchmod.c
        test/test-pipe-set-non-blocking.c
+       test/test-pipe-try-write.c
        test/test-platform-output.c
        test/test-poll-close-doesnt-corrupt-stack.c
        test/test-poll-close.c
