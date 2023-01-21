@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.4)
 
-cmake_policy(SET CMP0057 NEW) # Enable IN_LIST operator
-cmake_policy(SET CMP0064 NEW) # Support if (TEST) operator
 if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW) # Enable MSVC_RUNTIME_LIBRARY setting
 endif()
@@ -421,6 +419,20 @@ if(APPLE OR CMAKE_SYSTEM_NAME MATCHES "DragonFly|FreeBSD|Linux|NetBSD|OpenBSD")
   list(APPEND uv_test_libraries util)
 endif()
 
+if(CYGWIN OR MSYS)
+  list(APPEND uv_defines _GNU_SOURCE)
+  list(APPEND uv_sources
+       src/unix/cygwin.c
+       src/unix/bsd-ifaddrs.c
+       src/unix/no-fsevents.c
+       src/unix/no-proctitle.c
+       src/unix/posix-hrtime.c
+       src/unix/posix-poll.c
+       src/unix/procfs-exepath.c
+       src/unix/sysinfo-loadavg.c
+       src/unix/sysinfo-memory.c)
+endif()
+
 if(LIBUV_BUILD_SHARED)
   add_library(uv SHARED ${uv_sources})
   target_compile_definitions(uv
@@ -441,6 +453,7 @@ if(LIBUV_BUILD_SHARED)
     set_target_properties(uv PROPERTIES LINKER_LANGUAGE CXX)
   endif()
   target_link_libraries(uv ${uv_libraries})
+  set_target_properties(uv PROPERTIES OUTPUT_NAME "uv")
 endif()
 
 add_library(uv_a STATIC ${uv_sources})
@@ -457,6 +470,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "OS390")
   set_target_properties(uv_a PROPERTIES LINKER_LANGUAGE CXX)
 endif()
 target_link_libraries(uv_a ${uv_libraries})
+set_target_properties(uv_a PROPERTIES OUTPUT_NAME "uv")
+if(MSVC)
+  set_target_properties(uv_a PROPERTIES PREFIX "lib")
+endif()
 
 if(LIBUV_BUILD_TESTS)
   # Small hack: use ${uv_test_sources} now to get the runner skeleton,
@@ -714,11 +731,14 @@ configure_file(libuv-static.pc.in libuv-static.pc @ONLY)
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES LICENSE-extra DESTINATION ${CMAKE_INSTALL_DOCDIR})
 install(FILES ${PROJECT_BINARY_DIR}/libuv-static.pc
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 install(TARGETS uv_a EXPORT libuvConfig
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(EXPORT libuvConfig DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libuv)
+install(EXPORT libuvConfig
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libuv
+	NAMESPACE libuv::)
 
 if(LIBUV_BUILD_SHARED)
   # The version in the filename is mirroring the behaviour of autotools.

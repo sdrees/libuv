@@ -2047,20 +2047,53 @@ TEST_IMPL(fs_link) {
 
 
 TEST_IMPL(fs_readlink) {
-  uv_fs_t req;
+  /* Must return UV_ENOENT on an inexistent file */
+  {
+    uv_fs_t req;
 
-  loop = uv_default_loop();
-  ASSERT(0 == uv_fs_readlink(loop, &req, "no_such_file", dummy_cb));
-  ASSERT(0 == uv_run(loop, UV_RUN_DEFAULT));
-  ASSERT(dummy_cb_count == 1);
-  ASSERT_NULL(req.ptr);
-  ASSERT(req.result == UV_ENOENT);
-  uv_fs_req_cleanup(&req);
+    loop = uv_default_loop();
+    ASSERT(0 == uv_fs_readlink(loop, &req, "no_such_file", dummy_cb));
+    ASSERT(0 == uv_run(loop, UV_RUN_DEFAULT));
+    ASSERT(dummy_cb_count == 1);
+    ASSERT_NULL(req.ptr);
+    ASSERT(req.result == UV_ENOENT);
+    uv_fs_req_cleanup(&req);
 
-  ASSERT(UV_ENOENT == uv_fs_readlink(NULL, &req, "no_such_file", NULL));
-  ASSERT_NULL(req.ptr);
-  ASSERT(req.result == UV_ENOENT);
-  uv_fs_req_cleanup(&req);
+    ASSERT(UV_ENOENT == uv_fs_readlink(NULL, &req, "no_such_file", NULL));
+    ASSERT_NULL(req.ptr);
+    ASSERT(req.result == UV_ENOENT);
+    uv_fs_req_cleanup(&req);
+  }
+
+  /* Must return UV_EINVAL on a non-symlink file */
+  {
+    int r;
+    uv_fs_t req;
+    uv_file file;
+
+    /* Setup */
+
+    /* Create a non-symlink file */
+    r = uv_fs_open(NULL, &req, "test_file", O_RDWR | O_CREAT,
+                   S_IWUSR | S_IRUSR, NULL);
+    ASSERT_GE(r, 0);
+    ASSERT_GE(req.result, 0);
+    file = req.result;
+    uv_fs_req_cleanup(&req);
+
+    r = uv_fs_close(NULL, &req, file, NULL);
+    ASSERT_EQ(r, 0);
+    ASSERT_EQ(req.result, 0);
+    uv_fs_req_cleanup(&req);
+
+    /* Test */
+    r = uv_fs_readlink(NULL, &req, "test_file", NULL);
+    ASSERT_EQ(r, UV_EINVAL);
+    uv_fs_req_cleanup(&req);
+
+    /* Cleanup */
+    unlink("test_file");
+  }
 
   MAKE_VALGRIND_HAPPY();
   return 0;
@@ -2755,8 +2788,8 @@ TEST_IMPL(fs_lutime) {
   loop = uv_default_loop();
   unlink(path);
   r = uv_fs_open(NULL, &req, path, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR, NULL);
-  ASSERT(r >= 0);
-  ASSERT(req.result >= 0);
+  ASSERT_GE(r, 0);
+  ASSERT_GE(req.result, 0);
   uv_fs_req_cleanup(&req);
   uv_fs_close(loop, &req, r, NULL);
 
@@ -2772,8 +2805,8 @@ TEST_IMPL(fs_lutime) {
         "Symlink creation requires elevated console (with admin rights)");
   }
 #endif
-  ASSERT(s == 0);
-  ASSERT(req.result == 0);
+  ASSERT_EQ(s, 0);
+  ASSERT_EQ(req.result, 0);
   uv_fs_req_cleanup(&req);
 
   /* Test the synchronous version. */
@@ -2787,12 +2820,12 @@ TEST_IMPL(fs_lutime) {
   r = uv_fs_lutime(NULL, &req, symlink_path, atime, mtime, NULL);
 #if (defined(_AIX) && !defined(_AIX71)) ||                                    \
      defined(__MVS__)
-  ASSERT(r == UV_ENOSYS);
+  ASSERT_EQ(r, UV_ENOSYS);
   RETURN_SKIP("lutime is not implemented for z/OS and AIX versions below 7.1");
 #endif
-  ASSERT(r == 0);
+  ASSERT_EQ(r, 0);
   lutime_cb(&req);
-  ASSERT(lutime_cb_count == 1);
+  ASSERT_EQ(lutime_cb_count, 1);
 
   /* Test the asynchronous version. */
   atime = mtime = 1291404900; /* 2010-12-03 20:35:00 */
@@ -2802,9 +2835,9 @@ TEST_IMPL(fs_lutime) {
   checkme.path = symlink_path;
 
   r = uv_fs_lutime(loop, &req, symlink_path, atime, mtime, lutime_cb);
-  ASSERT(r == 0);
+  ASSERT_EQ(r, 0);
   uv_run(loop, UV_RUN_DEFAULT);
-  ASSERT(lutime_cb_count == 2);
+  ASSERT_EQ(lutime_cb_count, 2);
 
   /* Cleanup. */
   unlink(path);
@@ -3745,9 +3778,10 @@ static void test_fs_partial(int doread) {
     uv_fs_req_cleanup(&write_req);
   }
 
-  ASSERT(0 == memcmp(buffer, ctx.data, ctx.size));
-
   ASSERT(0 == uv_thread_join(&thread));
+
+  ASSERT_MEM_EQ(buffer, ctx.data, ctx.size);
+
   ASSERT(0 == uv_run(loop, UV_RUN_DEFAULT));
 
   ASSERT(0 == close(pipe_fds[1]));
