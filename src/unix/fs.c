@@ -56,17 +56,19 @@
 #endif
 
 #if defined(__linux__)
-# include "sys/utsname.h"
+# include <sys/sendfile.h>
+# include <sys/utsname.h>
 #endif
 
-#if defined(__linux__) || defined(__sun)
+#if defined(__sun)
 # include <sys/sendfile.h>
 # include <sys/sysmacros.h>
 #endif
 
 #if defined(__APPLE__)
 # include <copyfile.h>
-# include <sys/sysctl.h>
+# include <sys/clonefile.h>
+# define UV__FS_CLONE_ACL 0x0004
 #elif defined(__linux__) && !defined(FICLONE)
 # include <sys/ioctl.h>
 # define FICLONE _IOW(0x94, 9, int)
@@ -1241,9 +1243,34 @@ done:
   return r;
 }
 
-static ssize_t uv__fs_copyfile(uv_fs_t* req) {
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
-  /* On macOS, use the native copyfile(3). */
+
+static int uv__fs_clonefile_mac(uv_fs_t* req) {
+  static _Atomic int no_clone_acl;
+  int flags;
+
+  flags = UV__FS_CLONE_ACL;
+  if (atomic_load_explicit(&no_clone_acl, memory_order_relaxed))
+    flags = 0;
+
+  /* Note: clonefile() does not set the group ID on the destination
+   * file correctly. */
+  if (!clonefile(req->path, req->new_path, flags))
+    return 0;  /* success */
+
+  if (errno == EINVAL) {
+    atomic_store_explicit(&no_clone_acl, 1, memory_order_relaxed);
+    errno = 0;
+    /* UV__FS_CLONE_ACL flag not supported (macOS < 13); try without. */
+    if (!clonefile(req->path, req->new_path, 0))
+      return 0;  /* success */
+  }
+
+  return UV__ERR(errno);
+}
+
+static int uv__fs_fcopyfile_mac(uv_fs_t* req) {
+  int rc;
   copyfile_flags_t flags;
 
   /* Don't overwrite the destination if its permissions disallow it. */
@@ -1252,22 +1279,38 @@ static ssize_t uv__fs_copyfile(uv_fs_t* req) {
       return UV__ERR(errno);
   }
 
-  flags = COPYFILE_ALL;
+  if ((req->flags & UV_FS_COPYFILE_FICLONE) ||
+      (req->flags & UV_FS_COPYFILE_FICLONE_FORCE)) {
+    rc = uv__fs_clonefile_mac(req);
 
-  if (req->flags & UV_FS_COPYFILE_FICLONE)
-    flags |= COPYFILE_CLONE;
+    /* Return on success.
+     * If an error occurred and force was set, return the error to the caller;
+     * fall back to copyfile() when force was not set. */
+    if (rc == 0 || (req->flags & UV_FS_COPYFILE_FICLONE_FORCE))
+      return rc;
 
-  if (req->flags & UV_FS_COPYFILE_FICLONE_FORCE)
-    flags |= COPYFILE_CLONE_FORCE;
-
-  if (req->flags & UV_FS_COPYFILE_EXCL)
-    flags |= COPYFILE_EXCL;
+    /* cloning failed. Inherit clonefile flags required for
+       falling back to copyfile. */
+    flags = COPYFILE_ALL | COPYFILE_NOFOLLOW_SRC | COPYFILE_EXCL;
+  } else {
+    flags = COPYFILE_ALL;
+    if (req->flags & UV_FS_COPYFILE_EXCL)
+      flags |= COPYFILE_EXCL;
+  }
 
   if (copyfile(req->path, req->new_path, NULL, flags))
     return UV__ERR(errno);
 
   return 0;
-#else /* defined(__APPLE__) && !TARGET_OS_IPHONE */
+}
+
+#endif /* defined(__APPLE__) && !TARGET_OS_IPHONE */
+
+static int uv__fs_copyfile(uv_fs_t* req) {
+#if defined(__APPLE__) && !TARGET_OS_IPHONE
+  /* On macOS, use the native clonefile(2)/copyfile(3). */
+  return uv__fs_fcopyfile_mac(req);
+#else
   uv_fs_t fs_req;
   uv_file srcfd;
   uv_file dstfd;
@@ -1576,26 +1619,7 @@ static int uv__fs_statx(int fd,
     return UV_ENOSYS;
   }
 
-  buf->st_dev = makedev(statxbuf.stx_dev_major, statxbuf.stx_dev_minor);
-  buf->st_mode = statxbuf.stx_mode;
-  buf->st_nlink = statxbuf.stx_nlink;
-  buf->st_uid = statxbuf.stx_uid;
-  buf->st_gid = statxbuf.stx_gid;
-  buf->st_rdev = makedev(statxbuf.stx_rdev_major, statxbuf.stx_rdev_minor);
-  buf->st_ino = statxbuf.stx_ino;
-  buf->st_size = statxbuf.stx_size;
-  buf->st_blksize = statxbuf.stx_blksize;
-  buf->st_blocks = statxbuf.stx_blocks;
-  buf->st_atim.tv_sec = statxbuf.stx_atime.tv_sec;
-  buf->st_atim.tv_nsec = statxbuf.stx_atime.tv_nsec;
-  buf->st_mtim.tv_sec = statxbuf.stx_mtime.tv_sec;
-  buf->st_mtim.tv_nsec = statxbuf.stx_mtime.tv_nsec;
-  buf->st_ctim.tv_sec = statxbuf.stx_ctime.tv_sec;
-  buf->st_ctim.tv_nsec = statxbuf.stx_ctime.tv_nsec;
-  buf->st_birthtim.tv_sec = statxbuf.stx_btime.tv_sec;
-  buf->st_birthtim.tv_nsec = statxbuf.stx_btime.tv_nsec;
-  buf->st_flags = 0;
-  buf->st_gen = 0;
+  uv__statx_to_stat(&statxbuf, buf);
 
   return 0;
 #else
@@ -1839,6 +1863,9 @@ int uv_fs_chown(uv_loop_t* loop,
 int uv_fs_close(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
   INIT(CLOSE);
   req->file = file;
+  if (cb != NULL)
+    if (uv__iou_fs_close(loop, req))
+      return 0;
   POST;
 }
 
@@ -1886,6 +1913,9 @@ int uv_fs_lchown(uv_loop_t* loop,
 int uv_fs_fdatasync(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
   INIT(FDATASYNC);
   req->file = file;
+  if (cb != NULL)
+    if (uv__iou_fs_fsync_or_fdatasync(loop, req, /* IORING_FSYNC_DATASYNC */ 1))
+      return 0;
   POST;
 }
 
@@ -1893,6 +1923,9 @@ int uv_fs_fdatasync(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
 int uv_fs_fstat(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
   INIT(FSTAT);
   req->file = file;
+  if (cb != NULL)
+    if (uv__iou_fs_statx(loop, req, /* is_fstat */ 1, /* is_lstat */ 0))
+      return 0;
   POST;
 }
 
@@ -1900,6 +1933,9 @@ int uv_fs_fstat(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
 int uv_fs_fsync(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb) {
   INIT(FSYNC);
   req->file = file;
+  if (cb != NULL)
+    if (uv__iou_fs_fsync_or_fdatasync(loop, req, /* no flags */ 0))
+      return 0;
   POST;
 }
 
@@ -1946,6 +1982,9 @@ int uv_fs_lutime(uv_loop_t* loop,
 int uv_fs_lstat(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb) {
   INIT(LSTAT);
   PATH;
+  if (cb != NULL)
+    if (uv__iou_fs_statx(loop, req, /* is_fstat */ 0, /* is_lstat */ 1))
+      return 0;
   POST;
 }
 
@@ -2007,6 +2046,9 @@ int uv_fs_open(uv_loop_t* loop,
   PATH;
   req->flags = flags;
   req->mode = mode;
+  if (cb != NULL)
+    if (uv__iou_fs_open(loop, req))
+      return 0;
   POST;
 }
 
@@ -2035,6 +2077,11 @@ int uv_fs_read(uv_loop_t* loop, uv_fs_t* req,
   memcpy(req->bufs, bufs, nbufs * sizeof(*bufs));
 
   req->off = off;
+
+  if (cb != NULL)
+    if (uv__iou_fs_read_or_write(loop, req, /* is_read */ 1))
+      return 0;
+
   POST;
 }
 
@@ -2142,6 +2189,9 @@ int uv_fs_sendfile(uv_loop_t* loop,
 int uv_fs_stat(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb) {
   INIT(STAT);
   PATH;
+  if (cb != NULL)
+    if (uv__iou_fs_statx(loop, req, /* is_fstat */ 0, /* is_lstat */ 0))
+      return 0;
   POST;
 }
 
@@ -2205,6 +2255,11 @@ int uv_fs_write(uv_loop_t* loop,
   memcpy(req->bufs, bufs, nbufs * sizeof(*bufs));
 
   req->off = off;
+
+  if (cb != NULL)
+    if (uv__iou_fs_read_or_write(loop, req, /* is_read */ 0))
+      return 0;
+
   POST;
 }
 
