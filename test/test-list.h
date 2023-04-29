@@ -289,6 +289,7 @@ TEST_DECLARE   (handle_fileno)
 TEST_DECLARE   (homedir)
 TEST_DECLARE   (tmpdir)
 TEST_DECLARE   (hrtime)
+TEST_DECLARE   (clock_gettime)
 TEST_DECLARE   (getaddrinfo_fail)
 TEST_DECLARE   (getaddrinfo_fail_sync)
 TEST_DECLARE   (getaddrinfo_basic)
@@ -556,6 +557,7 @@ TEST_DECLARE  (utf8_decode1_overrun)
 TEST_DECLARE  (uname)
 
 TEST_DECLARE  (metrics_info_check)
+TEST_DECLARE  (metrics_pool_events)
 TEST_DECLARE  (metrics_idle_time)
 TEST_DECLARE  (metrics_idle_time_thread)
 TEST_DECLARE  (metrics_idle_time_zero)
@@ -918,6 +920,8 @@ TASK_LIST_START
 
   TEST_ENTRY_CUSTOM (hrtime, 0, 0, 20000)
 
+  TEST_ENTRY  (clock_gettime)
+
   TEST_ENTRY_CUSTOM (getaddrinfo_fail, 0, 0, 10000)
   TEST_ENTRY_CUSTOM (getaddrinfo_fail_sync, 0, 0, 10000)
 
@@ -1192,6 +1196,7 @@ TASK_LIST_START
   TEST_HELPER   (readable_on_eof, tcp4_echo_server)
 
   TEST_ENTRY  (metrics_info_check)
+  TEST_ENTRY  (metrics_pool_events)
   TEST_ENTRY  (metrics_idle_time)
   TEST_ENTRY  (metrics_idle_time_thread)
   TEST_ENTRY  (metrics_idle_time_zero)
