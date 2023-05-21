@@ -159,6 +159,7 @@ enum {
 
 enum {
   UV__IORING_SQ_NEED_WAKEUP = 1u,
+  UV__IORING_SQ_CQ_OVERFLOW = 2u,
 };
 
 struct uv__io_cqring_offsets {
@@ -704,7 +705,8 @@ static void uv__iou_submit(struct uv__iou* iou) {
 
   if (flags & UV__IORING_SQ_NEED_WAKEUP)
     if (uv__io_uring_enter(iou->ringfd, 0, 0, UV__IORING_ENTER_SQ_WAKEUP))
-      perror("libuv: io_uring_enter(wakeup)");  /* Can't happen. */
+      if (errno != EOWNERDEAD)  /* Kernel bug. Harmless, ignore. */
+        perror("libuv: io_uring_enter(wakeup)");  /* Can't happen. */
 }
 
 
@@ -779,6 +781,11 @@ int uv__iou_fs_read_or_write(uv_loop_t* loop,
                              int is_read) {
   struct uv__io_uring_sqe* sqe;
   struct uv__iou* iou;
+
+  /* For the moment, if iovcnt is greater than IOV_MAX, fallback to the
+   * threadpool. In the future we might take advantage of IOSQE_IO_LINK. */
+  if (req->nbufs > IOV_MAX)
+    return 0;
 
   iou = &uv__get_internal_fields(loop)->iou;
 
@@ -891,7 +898,9 @@ static void uv__poll_io_uring(uv_loop_t* loop, struct uv__iou* iou) {
   uint32_t tail;
   uint32_t mask;
   uint32_t i;
+  uint32_t flags;
   int nevents;
+  int rc;
 
   head = *iou->cqhead;
   tail = atomic_load_explicit((_Atomic uint32_t*) iou->cqtail,
@@ -930,6 +939,21 @@ static void uv__poll_io_uring(uv_loop_t* loop, struct uv__iou* iou) {
   atomic_store_explicit((_Atomic uint32_t*) iou->cqhead,
                         tail,
                         memory_order_release);
+
+  /* Check whether CQE's overflowed, if so enter the kernel to make them
+   * available. Don't grab them immediately but in the next loop iteration to
+   * avoid loop starvation. */
+  flags = atomic_load_explicit((_Atomic uint32_t*) iou->sqflags,
+                               memory_order_acquire);
+
+  if (flags & UV__IORING_SQ_CQ_OVERFLOW) {
+    do
+      rc = uv__io_uring_enter(iou->ringfd, 0, 0, UV__IORING_ENTER_GETEVENTS);
+    while (rc == -1 && errno == EINTR);
+
+    if (rc < 0)
+      perror("libuv: io_uring_enter(getevents)");  /* Can't happen. */
+  }
 
   uv__metrics_inc_events(loop, nevents);
   if (uv__get_internal_fields(loop)->current_timeout == 0)
