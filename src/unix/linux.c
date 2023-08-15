@@ -328,6 +328,31 @@ unsigned uv__kernel_version(void) {
   if (3 != sscanf(u.release, "%u.%u.%u", &major, &minor, &patch))
     return 0;
 
+  /* Handle it when the process runs under the UNAME26 personality:
+   *
+   * - kernels >= 3.x identify as 2.6.40+x
+   * - kernels >= 4.x identify as 2.6.60+x
+   *
+   * UNAME26 is a poorly conceived hack that doesn't let us distinguish
+   * between 4.x kernels and 5.x/6.x kernels so we conservatively assume
+   * that 2.6.60+x means 4.x.
+   *
+   * Fun fact of the day: it's technically possible to observe the actual
+   * kernel version for a brief moment because uname() first copies out the
+   * real release string before overwriting it with the backcompat string.
+   */
+  if (major == 2 && minor == 6) {
+    if (patch >= 60) {
+      major = 4;
+      minor = patch - 60;
+      patch = 0;
+    } else if (patch >= 40) {
+      major = 3;
+      minor = patch - 40;
+      patch = 0;
+    }
+  }
+
   version = major * 65536 + minor * 256 + patch;
   atomic_store_explicit(&cached_version, version, memory_order_relaxed);
 
@@ -1370,40 +1395,19 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
      */
     SAVE_ERRNO(uv__update_time(loop));
 
-    if (nfds == 0) {
+    if (nfds == -1)
+      assert(errno == EINTR);
+    else if (nfds == 0)
+      /* Unlimited timeout should only return with events or signal. */
       assert(timeout != -1);
 
+    if (nfds == 0 || nfds == -1) {
       if (reset_timeout != 0) {
         timeout = user_timeout;
         reset_timeout = 0;
+      } else if (nfds == 0) {
+        return;
       }
-
-      if (timeout == -1)
-        continue;
-
-      if (timeout == 0)
-        break;
-
-      /* We may have been inside the system call for longer than |timeout|
-       * milliseconds so we need to update the timestamp to avoid drift.
-       */
-      goto update_timeout;
-    }
-
-    if (nfds == -1) {
-      if (errno != EINTR)
-        abort();
-
-      if (reset_timeout != 0) {
-        timeout = user_timeout;
-        reset_timeout = 0;
-      }
-
-      if (timeout == -1)
-        continue;
-
-      if (timeout == 0)
-        break;
 
       /* Interrupted by a signal. Update timeout and poll again. */
       goto update_timeout;
@@ -1515,13 +1519,13 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
       break;
     }
 
+update_timeout:
     if (timeout == 0)
       break;
 
     if (timeout == -1)
       continue;
 
-update_timeout:
     assert(timeout > 0);
 
     real_timeout -= (loop->time - base);
