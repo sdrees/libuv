@@ -79,6 +79,8 @@
 #  define __NR_copy_file_range 379
 # elif defined(__arc__)
 #  define __NR_copy_file_range 285
+# elif defined(__riscv)
+#  define __NR_copy_file_range 285
 # endif
 #endif /* __NR_copy_file_range */
 
@@ -95,6 +97,8 @@
 #  define __NR_statx 383
 # elif defined(__s390__)
 #  define __NR_statx 379
+# elif defined(__riscv)
+#  define __NR_statx 291
 # endif
 #endif /* __NR_statx */
 
@@ -111,6 +115,8 @@
 #  define __NR_getrandom 359
 # elif defined(__s390__)
 #  define __NR_getrandom 349
+# elif defined(__riscv)
+#  define __NR_getrandom 278
 # endif
 #endif /* __NR_getrandom */
 
@@ -317,13 +323,34 @@ unsigned uv__kernel_version(void) {
   unsigned major;
   unsigned minor;
   unsigned patch;
+  char v_sig[256];
+  char* needle;
 
   version = atomic_load_explicit(&cached_version, memory_order_relaxed);
   if (version != 0)
     return version;
 
+  /* Check /proc/version_signature first as it's the way to get the mainline
+   * kernel version in Ubuntu. The format is:
+   *   Ubuntu ubuntu_kernel_version mainline_kernel_version
+   * For example:
+   *   Ubuntu 5.15.0-79.86-generic 5.15.111
+   */
+  if (0 == uv__slurp("/proc/version_signature", v_sig, sizeof(v_sig)))
+    if (3 == sscanf(v_sig, "Ubuntu %*s %u.%u.%u", &major, &minor, &patch))
+      goto calculate_version;
+
   if (-1 == uname(&u))
     return 0;
+
+  /* In Debian we need to check `version` instead of `release` to extract the
+   * mainline kernel version. This is an example of how it looks like:
+   *  #1 SMP Debian 5.10.46-4 (2021-08-03)
+   */
+  needle = strstr(u.version, "Debian ");
+  if (needle != NULL)
+    if (3 == sscanf(needle, "Debian %u.%u.%u", &major, &minor, &patch))
+      goto calculate_version;
 
   if (3 != sscanf(u.release, "%u.%u.%u", &major, &minor, &patch))
     return 0;
@@ -353,6 +380,7 @@ unsigned uv__kernel_version(void) {
     }
   }
 
+calculate_version:
   version = major * 65536 + minor * 256 + patch;
   atomic_store_explicit(&cached_version, version, memory_order_relaxed);
 
